@@ -1,6 +1,6 @@
 # vagrant-lamp-bootstrap
 
-A super-simple install.sh to setup a LAMP stack inside Vagrant 100% automatically.
+A super-simple install.sh to setup a LAMP inside Vagrant 100% automatically.
 
 ### Whaaaaat ?
 
