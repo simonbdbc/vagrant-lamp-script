@@ -113,12 +113,11 @@ Vagrant.configure("2") do |config|
   # argument is a set of non-required options.
   config.vm.synced_folder "./${PROJECTFOLDER}", "/var/www/html"
 
-  # Define the bootstrap file: 
-  # A (shell) script that runs after first setup of your box (= provisioning)
+  # A (shell) script that runs after first setup of your box
+  # Provisioning the bootstrap file:   
   if File.exists?("./${PROJECTFOLDER}/bootstrap.sh")
     config.vm.provision :shell, path: "./${PROJECTFOLDER}/bootstrap.sh"
   else
-  
   end
 
   # Provider-specific configuration so you can fine-tune various
@@ -153,31 +152,63 @@ BOOTSTRAP=$(cat <<EOF1
 #!/usr/bin/env bash
 
 # Use single quotes instead of double quotes to make it work with special-character passwords
-PASSWORD='${PASSWORD}'
+PASSWORD='0000'
+
+# Loading messages while all provisioning
+exe () {
+    MESSAGE_PREFIX="\b\b\b\b\b\b\b\b\b\b"
+    echo -e "\$MESSAGE_PREFIX Execute: \$1"
+    LOOP=0
+    while true;
+    do
+        if ! [ \$LOOP == 0 ]; then echo -e "\$MESSAGE_PREFIX > long process in progress...waiting please...     "; fi;
+        sleep 20;
+        LOOP=\$((LOOP+1))
+    done & ERROR=\$("\${@:2}" >> /vagrant/.vagrant/vm-build.log 2>&1)
+    status=\$?
+    kill \$!; trap 'kill \$!' SIGTERM
+
+    if [ \$status -ne 0 ];
+    then
+        echo -e "\$MESSAGE_PREFIX ✖ Error" >&2
+        echo -e "\$ERROR" >&2
+    else
+        echo -e "\$MESSAGE_PREFIX ✔ Success"
+    fi
+    return $status
+}
 
 # update / upgrade
-sudo apt-get -y update
-sudo apt-get -y dist-upgrade
+exe '--- Update Packages List ---' \
+    sudo apt-get -y update
+exe '--- Install Updates Packages ---' \
+    sudo apt-get -y dist-upgrade
 
 # install apache 2.5 and php 7.0
-sudo apt-get install -y apache2
-sudo apt-get install -y php7.0
-sudo apt-get -y update
+exe '--- Install Apache2 ---' \
+    sudo apt-get install -y apache2
+exe '--- Install Php7.0 ---' \
+    sudo apt-get install -y php7.0
 
 # install mysql and give password to installer
-sudo debconf-set-selections <<< "mysql-server mysql-server/root_password password $PASSWORD"
-sudo debconf-set-selections <<< "mysql-server mysql-server/root_password_again password $PASSWORD"
-sudo apt-get -y install mysql-server
-sudo apt-get -y update
+exe '--- Setup MySQL Password ---' \
+    sudo debconf-set-selections <<< "mysql-server mysql-server/root_password password 0000"
+exe '--- Setup MySQL Password Confirmation ---' \
+    sudo debconf-set-selections <<< "mysql-server mysql-server/root_password_again password 0000"
+exe '--- Install MySQL ---' \
+    sudo apt-get -y install mysql-server
 
 # install php dependencies
-sudo apt-get install php7.0-mysql
-sudo apt-get install libapache2-mod-php7.0
-sudo apt-get -y update
+exe '--- Install Php Dependencies ---' \
+    sudo apt-get install -y php7.0-mysql libapache2-mod-php7.0
 
 # setup php display errors
-sudo sed -i 's/display_errors = Off/display_errors = On/g' /etc/php/7.0/apache2/php.ini
-sudo sed -i 's/display_startup_errors = Off/display_startup_errors = On/g' /etc/php/7.0/apache2/php.ini
+exe '--- Activate Php Display All Errors ---' \
+    sudo sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/7.0/apache2/php.ini
+exe '--- Activate Php Display Errors ---' \
+    sudo sed -i 's/display_errors = Off/display_errors = On/g' /etc/php/7.0/apache2/php.ini
+exe '--- Activate Php Display Startup Errors ---' \
+    sudo sed -i 's/display_startup_errors = Off/display_startup_errors = On/g' /etc/php/7.0/apache2/php.ini
 
 # setup hosts file
 VHOST=\$(cat <<EOF2
@@ -217,27 +248,50 @@ VHOST=\$(cat <<EOF2
 </VirtualHost>
 EOF2
 )
+MESSAGE_PREFIX="\b\b\b\b\b\b\b\b\b\b"
+echo -e "\$MESSAGE_PREFIX Execute: --- Setup Hosts File ---"
 echo "\${VHOST}" > /etc/apache2/sites-available/000-default.conf
+echo -e "\$MESSAGE_PREFIX ✔ Success"
 
 # enable mod_rewrite
-sudo a2enmod rewrite
+exe '--- Enable Mod Rewrite ---' \
+    sudo a2enmod rewrite
 
 # restart apache
-sudo service apache2 restart
+exe '--- Restart Apache ---' \
+    sudo service apache2 restart
 
-# install git
-sudo apt-get -y install git
+# verify composer installer SHA-384
+MESSAGE_PREFIX="\b\b\b\b\b\b\b\b\b\b"
+echo -e "\$MESSAGE_PREFIX Execute: --- Verify Composer Installer SHA-384 ---"
+EXPECTED_SIGNATURE=\$(sudo wget -q -O - https://composer.github.io/installer.sig)
+sudo php -r "copy('https://getcomposer.org/installer', './composer-setup.php');"
+ACTUAL_SIGNATURE=\$(sudo php -r "echo hash_file('SHA384', './composer-setup.php');")
+if [ "\$EXPECTED_SIGNATURE" != "\$ACTUAL_SIGNATURE" ]
+then
+    >&2 echo 'ERROR: Invalid installer signature'
+    sudo rm ./composer-setup.php
+    exit 1
+fi
+echo -e "\$MESSAGE_PREFIX ✔ Success"
 
-# install Composer
-curl -s https://getcomposer.org/installer | php
-mv composer.phar /usr/local/bin/composer
-sudo apt-get -y dist-upgrade
-sudo apt-get -y update
-sudo apt-get install -f
+# install composer
+exe '--- Install Composer ---' \
+    sudo php composer-setup.php --filename=composer --install-dir=/usr/local/bin --quiet
+
+# remove composer setup
+exe '--- Remove Composer Setup ---' \
+    sudo rm ./composer-setup.php
+
+# update / upgrade
+exe '--- Update Packages List ---' \
+    sudo apt-get -y update
 
 # clean install
-rm /var/www/html/index.html
-rm /var/www/html/bootstrap.sh
+exe '--- Remove apache index.html ---' \
+    rm /var/www/html/index.html
+exe '--- Remove bootstrap.sh File ---' \
+    rm /var/www/html/bootstrap.sh
 
 EOF1
 )
