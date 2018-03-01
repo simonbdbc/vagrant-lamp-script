@@ -1,4 +1,6 @@
-# vagrant-lamp-bootstrap
+# vagrant-lamp-script
+
+https://github.com/Simonbdbc/vagrant-lamp-script
 
 A super-simple install.sh to setup a LAMP stack inside Vagrant 100% automatically.
 
