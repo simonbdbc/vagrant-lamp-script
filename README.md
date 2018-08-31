@@ -44,9 +44,9 @@ The bootstrap.sh will:
 
 ### How to use ?
 
-* install Virtualbox (v5.1.30)
+* install Virtualbox (v5.1.38)
 
-* install Vagrant (v2.0.1)
+* install Vagrant (v2.1.3)
 
 * Put install.sh inside the box folder (an empty folder) and execute it by do a `'bash install.sh'` on the command line.
 
